@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mastermind Code Breaker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: two-column console — guess ledger on the left, controls + case notes on the right; stacks on phones */
+:root{
+  --bg:#eceef2; --surface:#f8f9fb; --ink:#161a22; --muted:#5d6574; --line:#d3d7df; --slot:#dfe2e8;
+  --accent:#b3261e; --good:#1f7a4a;
+  --p1:#d7263d; --p2:#f08a24; --p3:#f2c014; --p4:#2e9e5b; --p5:#2f6fd6; --p6:#8a3fd1; --p7:#e45ba7; --p8:#2bb8c4;
+  --f-display:"Syne", "Arial Black", system-ui, sans-serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1015; --surface:#161922; --ink:#e8eaf0; --muted:#8d95a5; --line:#262b36; --slot:#232835;
+  --accent:#ff5a4e; --good:#4fcf8a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1015; --surface:#161922; --ink:#e8eaf0; --muted:#8d95a5; --line:#262b36; --slot:#232835;
+  --accent:#ff5a4e; --good:#4fcf8a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(2rem,6vw,3.3rem);line-height:.95;margin:0;letter-spacing:-.01em;text-transform:uppercase}
+h1 em{font-style:normal;color:var(--accent)}
+.tag{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0}
+.diff{display:flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--surface)}
+.diff button{font:600 .85rem var(--f-body);border:0;background:transparent;color:var(--muted);padding:7px 14px;border-radius:999px;cursor:pointer}
+.diff button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.diff button:focus-visible,.btn:focus-visible,.peg-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:28px;align-items:start}
+.ledger{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:12px;padding:6px 8px;border-radius:10px}
+.row.current{background:var(--slot)}
+.row .n{font-family:var(--f-mono);font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.pegs{display:flex;gap:clamp(6px,1.6vw,10px)}
+.peg{width:clamp(28px,7vw,38px);aspect-ratio:1;border-radius:50%;background:var(--slot);border:2px solid var(--line);flex:none}
+.row.current .peg{border-color:var(--muted);background:var(--surface)}
+.peg.filled{border-color:transparent;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
+.row.current .peg.filled{cursor:pointer}
+.fb{display:grid;grid-template-columns:repeat(3,12px);gap:4px;min-width:44px}
+.fb i{width:12px;height:12px;border-radius:50%;display:block;border:2px solid var(--line)}
+.fb i.x{background:var(--ink);border-color:var(--ink)}
+.fb i.c{background:transparent;border-color:var(--ink)}
+.secret{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:12px;padding:10px 8px 4px;border-top:1px dashed var(--line);margin-top:4px}
+.secret .peg{background:var(--ink);border-color:var(--ink);display:grid;place-items:center;color:var(--bg);font:700 .9rem var(--f-display)}
+.side{display:flex;flex-direction:column;gap:20px}
+.palette{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.peg-btn{aspect-ratio:1;border-radius:50%;border:0;cursor:pointer;box-shadow:inset 0 -4px 0 rgba(0,0,0,.2);position:relative;
+  font:600 .7rem var(--f-mono);color:rgba(255,255,255,.85)}
+.peg-btn:active{transform:scale(.93)}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:10px}
+.btn{font:700 .95rem var(--f-display);letter-spacing:.03em;text-transform:uppercase;border-radius:12px;padding:13px 10px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.status{min-height:3.2em;margin:0;font-weight:500}
+.status.win{color:var(--good)} .status.lose{color:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--line)}
+.stats div{padding:8px 0;display:flex;flex-direction:column}
+.stats div+div{border-left:1px solid var(--line);padding-left:12px}
+.stats b{font:800 1.4rem var(--f-display);font-variant-numeric:tabular-nums}
+.stats small{font-family:var(--f-mono);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.notes{font-size:.92rem;color:var(--muted)}
+.notes h3{font-family:var(--f-mono);font-weight:500;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:0 0 6px}
+.notes p{margin:0 0 8px}
+.key{display:inline-flex;align-items:center;gap:6px;margin-right:12px;white-space:nowrap}
+.key i{width:11px;height:11px;border-radius:50%;display:inline-block;border:2px solid var(--ink)}
+.key i.x{background:var(--ink)}
+@media (max-width:720px){.main{grid-template-columns:1fr}.side{order:-1}.palette{grid-template-columns:repeat(8,1fr);gap:6px}}
+@media (prefers-reduced-motion:reduce){.peg-btn:active{transform:none}}
+</style>
+<style>[hidden]{display:none!important}body{margin:0}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <p class="tag">Deduction game</p>
+      <h1>Master<em>mind</em></h1>
+    </div>
+    <div class="diff" role="group" aria-label="Difficulty">
+      <button type="button" data-d="easy">Easy</button>
+      <button type="button" data-d="normal" aria-pressed="true">Normal</button>
+      <button type="button" data-d="hard">Hard</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="ledger" id="ledger" aria-label="Guesses"></div>
+
+    <aside class="side">
+      <div>
+        <p class="tag" style="margin-bottom:8px" id="palLabel">Pick colors · 6 in play</p>
+        <div class="palette" id="palette"></div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="undo" type="button">Undo</button>
+        <button class="btn primary" id="submit" type="button" disabled>Submit guess</button>
+      </div>
+      <p class="status" id="status" aria-live="polite">Crack the 4-color code in 10 guesses or fewer.</p>
+      <div class="stats">
+        <div><small>Solved</small><b id="sWon">0</b></div>
+        <div><small>Avg guesses</small><b id="sAvg">–</b></div>
+        <div><small>Best</small><b id="sBest">–</b></div>
+      </div>
+      <button class="btn" id="newGame" type="button">New code</button>
+      <div class="notes">
+        <h3>Reading the clues</h3>
+        <p><span class="key"><i class="x"></i>Right color, right spot</span><span class="key"><i></i>Right color, wrong spot</span></p>
+        <p>Clues are not in slot order. Colors can repeat on Normal and Hard. Keys: 1–8 add a color, Backspace undoes, Enter submits.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const MODES = {
+    easy:   { len: 4, colors: 6, dupes: false, tries: 10 },
+    normal: { len: 4, colors: 6, dupes: true,  tries: 10 },
+    hard:   { len: 5, colors: 8, dupes: true,  tries: 10 }
+  };
+  const NAMES = ['Red','Orange','Yellow','Green','Blue','Purple','Pink','Teal'];
+  const $ = id => document.getElementById(id);
+  const ledger = $('ledger'), palette = $('palette'), statusEl = $('status');
+  let mode = 'normal', cfg, secret, guesses, current, over;
+  let stats = {};
+  try { stats = JSON.parse(localStorage.getItem('mmStats') || '{}'); } catch (e) { stats = {}; }
+  try { const m = localStorage.getItem('mmMode'); if (MODES[m]) mode = m; } catch (e) {}
+
+  const color = i => `var(--p${i + 1})`;
+
+  function makeSecret() {
+    const pool = [...Array(cfg.colors).keys()], out = [];
+    while (out.length < cfg.len) {
+      const k = Math.floor(Math.random() * pool.length);
+      out.push(pool[k]);
+      if (!cfg.dupes) pool.splice(k, 1);
+    }
+    return out;
+  }
+
+  function score(g) {
+    let exact = 0; const s = [], h = [];
+    g.forEach((c, i) => { if (c === secret[i]) exact++; else { s.push(secret[i]); h.push(c); } });
+    let close = 0;
+    h.forEach(c => { const k = s.indexOf(c); if (k > -1) { close++; s.splice(k, 1); } });
+    return { exact, close };
+  }
+
+  function newGame() {
+    cfg = MODES[mode]; secret = makeSecret(); guesses = []; current = []; over = false;
+    document.querySelectorAll('.diff button').forEach(b => b.setAttribute('aria-pressed', b.dataset.d === mode));
+    $('palLabel').textContent = `Pick colors · ${cfg.colors} in play${cfg.dupes ? ' · repeats allowed' : ' · no repeats'}`;
+    statusEl.className = 'status';
+    statusEl.textContent = `Crack the ${cfg.len}-color code in ${cfg.tries} guesses or fewer.`;
+    buildPalette(); render(); renderStats();
+  }
+
+  function buildPalette() {
+    palette.innerHTML = '';
+    for (let i = 0; i < cfg.colors; i++) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'peg-btn'; b.style.background = color(i);
+      b.textContent = i + 1; b.setAttribute('aria-label', NAMES[i]);
+      b.addEventListener('click', () => add(i));
+      palette.appendChild(b);
+    }
+  }
+
+  function add(i) {
+    if (over || current.length >= cfg.len) return;
+    if (!cfg.dupes && current.includes(i)) { flash('No repeats on Easy.'); return; }
+    current.push(i); render();
+  }
+  function removeAt(k) { if (over) return; current.splice(k, 1); render(); }
+  function undo() { if (over) return; current.pop(); render(); }
+
+  function submit() {
+    if (over || current.length !== cfg.len) return;
+    const fb = score(current);
+    guesses.push({ g: current.slice(), ...fb }); current = [];
+    if (fb.exact === cfg.len) finish(true);
+    else if (guesses.length >= cfg.tries) finish(false);
+    else {
+      statusEl.className = 'status';
+      statusEl.textContent = `${fb.exact} exact, ${fb.close} misplaced. ${cfg.tries - guesses.length} guesses left.`;
+    }
+    render();
+  }
+
+  function finish(won) {
+    over = true;
+    const s = stats[mode] || { won: 0, total: 0, best: 0 };
+    if (won) {
+      s.won++; s.total += guesses.length;
+      s.best = s.best ? Math.min(s.best, guesses.length) : guesses.length;
+      statusEl.className = 'status win';
+      statusEl.textContent = `Code cracked in ${guesses.length} ${guesses.length === 1 ? 'guess' : 'guesses'}. ${guesses.length <= 4 ? 'Just as planned.' : 'Solid deduction.'}`;
+    } else {
+      statusEl.className = 'status lose';
+      statusEl.textContent = 'Out of guesses. The code is revealed below.';
+    }
+    stats[mode] = s;
+    try { localStorage.setItem('mmStats', JSON.stringify(stats)); } catch (e) {}
+    renderStats();
+  }
+
+  function flash(msg) { statusEl.className = 'status lose'; statusEl.textContent = msg; }
+
+  function pegsHTML(arr, interactive) {
+    let h = '<div class="pegs">';
+    for (let i = 0; i < cfg.len; i++) {
+      const c = arr[i];
+      h += c === undefined ? '<span class="peg"></span>'
+        : `<span class="peg filled" style="background:${color(c)}" ${interactive ? `data-k="${i}" title="Remove ${NAMES[c]}"` : ''} aria-label="${NAMES[c]}"></span>`;
+    }
+    return h + '</div>';
+  }
+  function fbHTML(r) {
+    let h = '<div class="fb" aria-label="' + (r ? `${r.exact} exact, ${r.close} misplaced` : '') + '">';
+    for (let i = 0; i < cfg.len; i++) h += r ? `<i class="${i < r.exact ? 'x' : i < r.exact + r.close ? 'c' : ''}"></i>` : '<i></i>';
+    return h + '</div>';
+  }
+
+  function render() {
+    let h = '';
+    for (let r = 0; r < cfg.tries; r++) {
+      const done = guesses[r], isCur = !over && r === guesses.length;
+      h += `<div class="row${isCur ? ' current' : ''}"><span class="n">${String(r + 1).padStart(2, '0')}</span>`
+        + pegsHTML(done ? done.g : isCur ? current : [], isCur) + fbHTML(done) + '</div>';
+    }
+    h += `<div class="secret"><span class="n">KEY</span>` + (over
+      ? pegsHTML(secret, false)
+      : '<div class="pegs">' + Array(cfg.len).fill('<span class="peg">?</span>').join('') + '</div>') + '<span></span></div>';
+    ledger.innerHTML = h;
+    ledger.querySelectorAll('.peg[data-k]').forEach(p => p.addEventListener('click', () => removeAt(+p.dataset.k)));
+    $('submit').disabled = over || current.length !== cfg.len;
+    $('undo').disabled = over || !current.length;
+  }
+
+  function renderStats() {
+    const s = stats[mode] || { won: 0, total: 0, best: 0 };
+    $('sWon').textContent = s.won;
+    $('sAvg').textContent = s.won ? (s.total / s.won).toFixed(1) : '–';
+    $('sBest').textContent = s.best || '–';
+  }
+
+  document.querySelectorAll('.diff button').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.d; try { localStorage.setItem('mmMode', mode); } catch (e) {} newGame();
+  }));
+  $('undo').addEventListener('click', undo);
+  $('submit').addEventListener('click', submit);
+  $('newGame').addEventListener('click', newGame);
+  document.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('button') && e.key === 'Enter') return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= cfg.colors) add(n - 1);
+    else if (e.key === 'Backspace') { e.preventDefault(); undo(); }
+    else if (e.key === 'Enter') submit();
+  });
+
+  newGame();
+})();
+</script>
+</body>
+</html>
